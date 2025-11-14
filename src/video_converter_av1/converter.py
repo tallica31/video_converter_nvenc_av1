@@ -326,3 +326,7 @@ __all__ = [
     "main",
     "run_conversion",
 ]
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
