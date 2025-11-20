@@ -11,13 +11,15 @@ from video_converter_av1.converter import ConverterSettings, run_conversion
 
 @pytest.fixture()
 def fake_ffmpeg(monkeypatch):
-    """ffmpeg 呼び出しを記録し、外部プロセスを起動しないスタブ。"""
+    """ffmpeg/ffprobe 呼び出しを記録し、外部プロセスを起動しないスタブ。"""
 
     calls: list[list[str]] = []
 
-    def stub(command: list[str], check: bool) -> SimpleNamespace:
+    def stub(command: list[str], *args, **kwargs) -> SimpleNamespace:
+        if command[0] == "ffprobe":
+            return SimpleNamespace(returncode=0, stdout="1920x1080")
         calls.append(command)
-        return SimpleNamespace(returncode=0)
+        return SimpleNamespace(returncode=0, stdout="")
 
     monkeypatch.setattr("video_converter_av1.converter.subprocess.run", stub)
     return calls
@@ -53,7 +55,10 @@ def test_run_conversion_successful_flow(tmp_path, monkeypatch, fake_ffmpeg):
     with log_path.open(newline="", encoding="utf-8") as handle:
         rows = list(csv.DictReader(handle))
     assert rows[0]["status"] == "success"
-    assert rows[0]["output"].endswith(".mkv")
+    output_path = Path(rows[0]["output"])
+    assert output_path.suffix == ".mp4"
+    assert output_path.parent == output_dir / "1920x1080"
+    assert fake_ffmpeg[0][-1].endswith(".mp4"), "ffmpeg 出力が MP4 になっていません"
 
 
 def test_run_conversion_error_without_software(monkeypatch, tmp_path):

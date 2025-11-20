@@ -31,6 +31,17 @@
 
    仮想環境の作成と依存関係のインストールが完了すると、以降は `uv run <command>` でツールを利用できます。
 
+### Windows / WSL を併用する場合
+
+Windows (PowerShell/CMD) と WSL から同じ作業ツリーを操作する場合は、仮想環境の衝突を避けるため WSL 側で `UV_PROJECT_ENVIRONMENT` を設定してください。
+
+```bash
+export UV_PROJECT_ENVIRONMENT=".venv-wsl"
+uv run pytest
+```
+
+Windows 側では特別な設定は不要で、従来通り `.venv` が利用されます。
+
 ## 🚀 使い方
 
 ### 基本コマンド

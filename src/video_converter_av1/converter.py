@@ -175,11 +175,51 @@ def ensure_disk_capacity(target_dir: Path, required_bytes: int) -> None:
         raise RuntimeError("ディスクの空き容量が不足しています")
 
 
-def build_output_path(file_path: Path, settings: ConverterSettings) -> Path:
+def probe_video_resolution(file_path: Path) -> tuple[int, int]:
+    """ffprobe を利用して入力動画の解像度を取得する。"""
+
+    command = [
+        "ffprobe",
+        "-v",
+        "error",
+        "-select_streams",
+        "v:0",
+        "-show_entries",
+        "stream=width,height",
+        "-of",
+        "csv=s=x:p=0",
+        str(file_path),
+    ]
+    try:
+        result = subprocess.run(
+            command,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except FileNotFoundError as exc:  # pragma: no cover - 実行環境依存
+        raise FileNotFoundError("ffprobe コマンドが見つかりません") from exc
+    resolution = result.stdout.strip()
+    try:
+        width_str, height_str = resolution.split("x")
+        width = int(width_str)
+        height = int(height_str)
+    except ValueError as exc:
+        raise RuntimeError("動画の解像度を取得できませんでした") from exc
+    if width <= 0 or height <= 0:
+        raise RuntimeError("動画の解像度を取得できませんでした")
+    return width, height
+
+
+def build_output_path(
+    file_path: Path, settings: ConverterSettings, resolution: tuple[int, int]
+) -> Path:
     """入力ファイルに対応する出力ファイルのパスを生成する。"""
 
     relative = file_path.relative_to(settings.input_dir)
-    candidate = (settings.output_dir / relative).with_suffix(".mkv")
+    width, height = resolution
+    resolution_dir = settings.output_dir / f"{width}x{height}"
+    candidate = (resolution_dir / relative).with_suffix(".mp4")
     candidate.parent.mkdir(parents=True, exist_ok=True)
     if candidate.exists():
         if settings.skip_existing:
@@ -253,7 +293,8 @@ def convert_single_file(
 ) -> ConversionLogEntry:
     """単一ファイルの変換処理を実行する。"""
 
-    output_path = build_output_path(file_path, settings)
+    resolution = probe_video_resolution(file_path)
+    output_path = build_output_path(file_path, settings, resolution)
     ensure_disk_capacity(output_path.parent, file_path.stat().st_size)
     command = build_ffmpeg_command(file_path, output_path, encoder, settings.quality)
     subprocess.run(command, check=True)
